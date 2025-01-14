@@ -180,6 +180,51 @@ class Client:
     #     packet_loss = (1 - len(received_segments) / total_segments) * 100 if total_segments > 0 else 100
     #     print(f"\033[92mUDP transfer finished, total time: {elapsed_time:.2f} seconds, total speed: {speed:.2f} bits/second, packet loss: {packet_loss:.2f}%\033[0m")
 
+    # def udp_transfer(self, server_ip, udp_port):
+    #     """
+    #     Performs a UDP transfer with the server, collects received segments, and calculates packet loss.
+    #
+    #     Args:
+    #         server_ip (str): Server IP address.
+    #         udp_port (int): Server UDP port.
+    #     """
+    #     udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    #     request_message = struct.pack('!IBQ', self.magic_cookie, self.request_type, self.file_size)
+    #     udp_socket.sendto(request_message, (server_ip, udp_port))
+    #
+    #     start_time = time.time()
+    #     received_segments = set()
+    #     total_segments = None  # Initialize as None to check later if it was received
+    #
+    #     while time.time() - start_time < 5:  # Allow 5 seconds for receiving packets
+    #         try:
+    #             udp_socket.settimeout(1)
+    #             data, _ = udp_socket.recvfrom(1024)
+    #
+    #             if len(data) < 21:
+    #                 print(f"\033[91mReceived malformed UDP packet (size: {len(data)} bytes)\033[0m")
+    #                 continue  # Skip processing this packet
+    #
+    #             # Unpack the packet
+    #             cookie, msg_type, total_segments_from_server = struct.unpack('!IBQ', data[:13])
+    #             segment = struct.unpack('!Q', data[13:21])[0]
+    #
+    #             if cookie == self.magic_cookie and msg_type == self.payload_type:
+    #                 received_segments.add(segment)
+    #                 total_segments = total_segments_from_server  # Update total_segments
+    #         except socket.timeout:
+    #             break
+    #         except Exception as e:
+    #             print(f"\033[91mError in UDP transfer: {e}\033[0m")
+    #
+    #     elapsed_time = time.time() - start_time
+    #     speed = (len(received_segments) * 1024 * 8) / elapsed_time if elapsed_time > 0 else 0
+    #     self.total_udp_speed += speed
+    #     self.udp_transfer_count += 1
+    #     packet_loss = (1 - len(received_segments) / total_segments) * 100 if total_segments else 100
+    #     print(f"\033[92mUDP transfer finished, total time: {elapsed_time:.2f} seconds, total speed: {speed:.2f} bits/second, packet loss: {packet_loss:.2f}%\033[0m")
+
+### with debug prints
     def udp_transfer(self, server_ip, udp_port):
         """
         Performs a UDP transfer with the server, collects received segments, and calculates packet loss.
@@ -191,6 +236,7 @@ class Client:
         udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         request_message = struct.pack('!IBQ', self.magic_cookie, self.request_type, self.file_size)
         udp_socket.sendto(request_message, (server_ip, udp_port))
+        print("\033[93m[DEBUG] Sent UDP request to server\033[0m")
 
         start_time = time.time()
         received_segments = set()
@@ -200,29 +246,41 @@ class Client:
             try:
                 udp_socket.settimeout(1)
                 data, _ = udp_socket.recvfrom(1024)
+                print(f"\033[94m[DEBUG] Received UDP packet of size {len(data)} bytes\033[0m")
 
                 if len(data) < 21:
-                    print(f"\033[91mReceived malformed UDP packet (size: {len(data)} bytes)\033[0m")
+                    print(f"\033[91m[DEBUG] Malformed UDP packet (size: {len(data)} bytes), skipping...\033[0m")
                     continue  # Skip processing this packet
 
                 # Unpack the packet
                 cookie, msg_type, total_segments_from_server = struct.unpack('!IBQ', data[:13])
                 segment = struct.unpack('!Q', data[13:21])[0]
+                print(f"\033[94m[DEBUG] Unpacked packet - Cookie: {cookie}, Msg Type: {msg_type}, Total Segments: {total_segments_from_server}, Segment: {segment}\033[0m")
 
                 if cookie == self.magic_cookie and msg_type == self.payload_type:
                     received_segments.add(segment)
                     total_segments = total_segments_from_server  # Update total_segments
+                    print(f"\033[92m[DEBUG] Valid packet received, segment {segment} added\033[0m")
+
             except socket.timeout:
+                print("\033[91m[DEBUG] Socket timeout, no more packets received within 1 second\033[0m")
                 break
             except Exception as e:
-                print(f"\033[91mError in UDP transfer: {e}\033[0m")
+                print(f"\033[91m[DEBUG] Error in UDP transfer: {e}\033[0m")
 
         elapsed_time = time.time() - start_time
         speed = (len(received_segments) * 1024 * 8) / elapsed_time if elapsed_time > 0 else 0
         self.total_udp_speed += speed
         self.udp_transfer_count += 1
-        packet_loss = (1 - len(received_segments) / total_segments) * 100 if total_segments else 100
+
+        if total_segments is None:
+            print("\033[91m[DEBUG] No valid packets received, setting packet loss to 100%\033[0m")
+            packet_loss = 100
+        else:
+            packet_loss = (1 - len(received_segments) / total_segments) * 100
+
         print(f"\033[92mUDP transfer finished, total time: {elapsed_time:.2f} seconds, total speed: {speed:.2f} bits/second, packet loss: {packet_loss:.2f}%\033[0m")
+
 
 
 if __name__ == "__main__":
