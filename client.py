@@ -158,10 +158,41 @@ class Client:
         print(f"\033[92mUDP transfer finished, total time: {elapsed_time:.2f} seconds, total speed: {speed:.2f} bits/second, packet loss: {packet_loss:.2f}%\033[0m")
 
 
-
 if __name__ == "__main__":
-    file_size = input("Enter file size (in bytes): ")
-    tcp_amount = input("Enter number of TCP connections: ")
-    udp_amount = input("Enter number of UDP connections: ")
+    while True:
+        try:
+            file_size = int(input("Enter file size (in bytes): "))
+            if file_size <= 0:
+                print("\033[91mFile size must be a positive integer. Please try again.\033[0m")
+                continue
+            break
+        except ValueError:
+            print("\033[91mInvalid input. File size must be a positive integer.\033[0m")
+
+    while True:
+        try:
+            tcp_amount = int(input("Enter number of TCP connections: "))
+            if tcp_amount < 0:
+                print("\033[91mNumber of TCP connections must be a non-negative integer. Please try again.\033[0m")
+                continue
+            break
+        except ValueError:
+            print("\033[91mInvalid input. Number of TCP connections must be a non-negative integer.\033[0m")
+
+    while True:
+        try:
+            udp_amount = int(input("Enter number of UDP connections: "))
+            if udp_amount < 0:
+                print("\033[91mNumber of UDP connections must be a non-negative integer. Please try again.\033[0m")
+                continue
+            if tcp_amount == 0 and udp_amount == 0:
+                print("\033[91mAt least one of TCP or UDP connections must be greater than zero.\033[0m")
+                continue
+            break
+        except ValueError:
+            print("\033[91mInvalid input. Number of UDP connections must be a non-negative integer.\033[0m")
+
     client = Client(file_size, tcp_amount, udp_amount)
     client.listen_for_offers()
+
+
