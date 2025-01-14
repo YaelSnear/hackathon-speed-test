@@ -48,6 +48,29 @@ class Client:
                 udp_socket.close()
                 sys.exit(0)
 
+    # def listen_for_offers(self):
+    #     udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    #     udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)  # Allow address reuse
+    #     udp_socket.bind(('', 13117))
+    #     udp_socket.settimeout(1)  # Set timeout to avoid busy-waiting
+    #     print("\033[93mClient started, listening for offer requests...\033[0m")
+    #
+    #     while self.running:
+    #         try:
+    #             ready, _, _ = select([udp_socket], [], [], 1)
+    #             if ready:
+    #                 data, addr = udp_socket.recvfrom(1024)
+    #                 if len(data) == 9:
+    #                     cookie, msg_type, udp_port, tcp_port = struct.unpack('!IBHH', data)
+    #                     if cookie == self.magic_cookie and msg_type == self.offer_type:
+    #                         print(f"\033[92mReceived offer from {addr[0]}\033[0m")
+    #                         self.start_speed_test(addr[0], udp_port, tcp_port)
+    #         except KeyboardInterrupt:
+    #             self.running = False
+    #             print("\033[91mClient shutting down...\033[0m")
+    #             udp_socket.close()
+    #             sys.exit(0)
+
     def start_speed_test(self, server_ip, udp_port, tcp_port):
         tcp_threads = []
         udp_threads = []
@@ -87,7 +110,7 @@ class Client:
             tcp_port (int): Server TCP port.
         """
         start_time = time.time()
-        retry_count = 3  # Retry up to 3 times on failure
+        retry_count = 10  # Retry up to 10 times on failure
         while retry_count > 0:
             try:
                 with socket.create_connection((server_ip, tcp_port)) as sock:
@@ -112,6 +135,51 @@ class Client:
 
         print("\033[91mTCP transfer failed after 3 retries\033[0m")
 
+    # def udp_transfer(self, server_ip, udp_port):
+    #     """
+    #     Performs a UDP transfer with the server, collects received segments, and calculates packet loss.
+    #
+    #     Args:
+    #         server_ip (str): Server IP address.
+    #         udp_port (int): Server UDP port.
+    #     """
+    #     udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    #     request_message = struct.pack('!IBQ', self.magic_cookie, self.request_type, self.file_size)
+    #     udp_socket.sendto(request_message, (server_ip, udp_port))
+    #
+    #     start_time = time.time()
+    #     received_segments = set()
+    #     total_segments = 0
+    #
+    #     while time.time() - start_time < 1:
+    #         try:
+    #             udp_socket.settimeout(1)
+    #             data, _ = udp_socket.recvfrom(1024)
+    #
+    #             if len(data) < 21:
+    #                 print(f"\033[91mReceived malformed UDP packet (size: {len(data)} bytes)\033[0m")
+    #                 continue  # Skip processing this packet
+    #
+    #             # Unpack the packet with 21 bytes
+    #             cookie, msg_type, total_segments = struct.unpack('!IBQ', data[:13])
+    #             segment = struct.unpack('!Q', data[13:21])[0]
+    #
+    #
+    #             if cookie == self.magic_cookie and msg_type == self.payload_type:
+    #                 received_segments.add(segment)
+    #         except socket.timeout:
+    #             break
+    #         except Exception as e:
+    #             print(f"\033[91mError in UDP transfer: {e}\033[0m")
+    #
+    #     elapsed_time = time.time() - start_time
+    #     speed = (len(received_segments) * 1024 * 8) / elapsed_time
+    #     #statistics
+    #     self.total_udp_speed += speed
+    #     self.udp_transfer_count += 1
+    #     packet_loss = (1 - len(received_segments) / total_segments) * 100 if total_segments > 0 else 100
+    #     print(f"\033[92mUDP transfer finished, total time: {elapsed_time:.2f} seconds, total speed: {speed:.2f} bits/second, packet loss: {packet_loss:.2f}%\033[0m")
+
     def udp_transfer(self, server_ip, udp_port):
         """
         Performs a UDP transfer with the server, collects received segments, and calculates packet loss.
@@ -126,9 +194,9 @@ class Client:
 
         start_time = time.time()
         received_segments = set()
-        total_segments = 0
+        total_segments = None  # Initialize as None to check later if it was received
 
-        while time.time() - start_time < 1:
+        while time.time() - start_time < 5:  # Allow 5 seconds for receiving packets
             try:
                 udp_socket.settimeout(1)
                 data, _ = udp_socket.recvfrom(1024)
@@ -137,24 +205,23 @@ class Client:
                     print(f"\033[91mReceived malformed UDP packet (size: {len(data)} bytes)\033[0m")
                     continue  # Skip processing this packet
 
-                # Unpack the packet with 21 bytes
-                cookie, msg_type, total_segments = struct.unpack('!IBQ', data[:13])
+                # Unpack the packet
+                cookie, msg_type, total_segments_from_server = struct.unpack('!IBQ', data[:13])
                 segment = struct.unpack('!Q', data[13:21])[0]
-
 
                 if cookie == self.magic_cookie and msg_type == self.payload_type:
                     received_segments.add(segment)
+                    total_segments = total_segments_from_server  # Update total_segments
             except socket.timeout:
                 break
             except Exception as e:
                 print(f"\033[91mError in UDP transfer: {e}\033[0m")
 
         elapsed_time = time.time() - start_time
-        speed = (len(received_segments) * 1024 * 8) / elapsed_time
-        #statistics
+        speed = (len(received_segments) * 1024 * 8) / elapsed_time if elapsed_time > 0 else 0
         self.total_udp_speed += speed
         self.udp_transfer_count += 1
-        packet_loss = (1 - len(received_segments) / total_segments) * 100 if total_segments > 0 else 100
+        packet_loss = (1 - len(received_segments) / total_segments) * 100 if total_segments else 100
         print(f"\033[92mUDP transfer finished, total time: {elapsed_time:.2f} seconds, total speed: {speed:.2f} bits/second, packet loss: {packet_loss:.2f}%\033[0m")
 
 
