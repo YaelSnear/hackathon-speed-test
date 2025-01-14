@@ -16,6 +16,13 @@ class Client:
         self.payload_type = 0x4
         self.running = True
 
+
+        # Add statistics counters
+        self.total_tcp_speed = 0
+        self.total_udp_speed = 0
+        self.tcp_transfer_count = 0
+        self.udp_transfer_count = 0
+
     def listen_for_offers(self):
         udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         udp_socket.bind(('', 13117))
@@ -31,7 +38,9 @@ class Client:
                     if len(data) == 9:
                         cookie, msg_type, udp_port, tcp_port = struct.unpack('!IBHH', data)
                         if cookie == self.magic_cookie and msg_type == self.offer_type:
-                            print(f"\033[92mReceived offer from {addr[0]}:{udp_port}\033[0m")
+                            #print(f"\033[92mReceived offer from {addr[0]}:{udp_port}\033[0m")
+                            print(f"\033[92mReceived offer from {addr[0]}\033[0m")
+
                             self.start_speed_test(addr[0], udp_port, tcp_port)
             except KeyboardInterrupt:
                 self.running = False
@@ -58,6 +67,15 @@ class Client:
 
         print("\033[93mAll transfers complete, listening to offer requests\033[0m")
 
+        # Display average speeds after all transfers are done
+        if self.tcp_transfer_count > 0:
+            avg_tcp_speed = self.total_tcp_speed / self.tcp_transfer_count
+            print(f"\033[96mAverage TCP speed: {avg_tcp_speed:.2f} bits/second\033[0m")
+
+        if self.udp_transfer_count > 0:
+            avg_udp_speed = self.total_udp_speed / self.udp_transfer_count
+            print(f"\033[96mAverage UDP speed: {avg_udp_speed:.2f} bits/second\033[0m")
+
     def tcp_transfer(self, server_ip, tcp_port):
 
 
@@ -82,6 +100,9 @@ class Client:
                         received_size += len(data)
                 elapsed_time = time.time() - start_time
                 speed = (self.file_size * 8) / elapsed_time
+                #statistics
+                self.total_tcp_speed += speed
+                self.tcp_transfer_count += 1
                 print(f"\033[92mTCP transfer finished, total time: {elapsed_time:.2f} seconds, total speed: {speed:.2f} bits/second\033[0m")
                 return
             except Exception as e:
@@ -90,39 +111,6 @@ class Client:
                 time.sleep(1)
 
         print("\033[91mTCP transfer failed after 3 retries\033[0m")
-
-    # def udp_transfer(self, server_ip, udp_port):
-    #     """
-    #     Performs a UDP transfer with the server, collects received segments, and calculates packet loss.
-    #
-    #     Args:
-    #         server_ip (str): Server IP address.
-    #         udp_port (int): Server UDP port.
-    #     """
-    #     udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    #     request_message = struct.pack('!IBQ', self.magic_cookie, self.request_type, self.file_size)
-    #     udp_socket.sendto(request_message, (server_ip, udp_port))
-    #
-    #     start_time = time.time()
-    #     received_segments = set()
-    #     total_segments = 0
-    #
-    #     while time.time() - start_time < 1:
-    #         try:
-    #             udp_socket.settimeout(1)
-    #             data, _ = udp_socket.recvfrom(1024)
-    #             cookie, msg_type, total_segments, segment = struct.unpack('!IBQQ', data[:24])
-    #             if cookie == self.magic_cookie and msg_type == self.payload_type:
-    #                 received_segments.add(segment)
-    #         except socket.timeout:
-    #             break
-    #         except Exception as e:
-    #             print(f"\033[91mError in UDP transfer: {e}\033[0m")
-    #
-    #     elapsed_time = time.time() - start_time
-    #     speed = (len(received_segments) * 1024 * 8) / elapsed_time
-    #     packet_loss = (1 - len(received_segments) / total_segments) * 100 if total_segments > 0 else 100
-    #     print(f"\033[92mUDP transfer finished, total time: {elapsed_time:.2f} seconds, total speed: {speed:.2f} bits/second, packet loss: {packet_loss:.2f}%\033[0m")
 
     def udp_transfer(self, server_ip, udp_port):
         """
@@ -163,6 +151,9 @@ class Client:
 
         elapsed_time = time.time() - start_time
         speed = (len(received_segments) * 1024 * 8) / elapsed_time
+        #statistics
+        self.total_udp_speed += speed
+        self.udp_transfer_count += 1
         packet_loss = (1 - len(received_segments) / total_segments) * 100 if total_segments > 0 else 100
         print(f"\033[92mUDP transfer finished, total time: {elapsed_time:.2f} seconds, total speed: {speed:.2f} bits/second, packet loss: {packet_loss:.2f}%\033[0m")
 
