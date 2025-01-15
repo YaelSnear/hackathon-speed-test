@@ -144,6 +144,7 @@ def start_client():
     try:
         while True:
             # Listen for offers
+             print(f"{Colors.INFO}{Colors.BOLD}Client started, listening for offer requests...{Colors.RESET}")
             server_ip, udp_port, tcp_port = listen_for_offers()
 
             # Get file size from the user
