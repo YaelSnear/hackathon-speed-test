@@ -145,7 +145,7 @@ def start_client():
 
             while True:
                 try:
-                    file_size = float(input(f"{Colors.BOLD}Enter file size (in bytes): {Colors.RESET}"))
+                    file_size = int(input(f"{Colors.BOLD}Enter file size (in bytes): {Colors.RESET}"))
                     if file_size <= 0:
                         print(f"{Colors.WARNING}File size must be a positive number.{Colors.RESET}")
                         continue
