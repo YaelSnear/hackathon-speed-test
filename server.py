@@ -25,8 +25,8 @@ REQUEST_MSG_TYPE = 0x3
 PAYLOAD_MSG_TYPE = 0x4
 UDP_PORT = 13117
 TCP_PORT = 20000
-BUFFER_SIZE = 1024
-PAYLOAD_SIZE = 1024  # 1 KB payload
+BUFFER_SIZE = 16*1024
+PAYLOAD_SIZE = 8*1024  
 conn_id_counter = 0  # Global counter
 
 server_running = threading.Event()
