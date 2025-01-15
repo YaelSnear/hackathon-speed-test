@@ -27,6 +27,7 @@ UDP_PORT = 13117
 TCP_PORT = 20000
 BUFFER_SIZE = 1024
 PAYLOAD_SIZE = 1024  # 1 KB payload
+conn_id_counter = 0  # Global counter
 
 server_running = threading.Event()
 
@@ -46,11 +47,37 @@ def udp_broadcast():
             sock.sendto(offer_message, ('<broadcast>', UDP_PORT))
             time.sleep(1)
 
+# def handle_udp_connection():
+#     """Handles incoming UDP requests and responds with payload packets."""
+#     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp_sock:
+#         udp_sock.bind(('', UDP_PORT))
+#         print(f"{Colors.OKGREEN}Listening for UDP requests on port {UDP_PORT}{Colors.ENDC}")
+#         while server_running.is_set():
+#             readable, _, _ = select([udp_sock], [], [], 1)
+#             for sock in readable:
+#                 data, addr = sock.recvfrom(BUFFER_SIZE)
+#                 if len(data) < 13:
+#                     continue
+#                 cookie, msg_type, file_size = struct.unpack('!IBQ', data[:13])
+#                 if cookie != MAGIC_COOKIE or msg_type != REQUEST_MSG_TYPE:
+#                     print(f"{Colors.FAIL}Invalid UDP request from {addr}{Colors.ENDC}")
+#                     continue
+#
+#                 total_segments = (file_size + PAYLOAD_SIZE - 1) // PAYLOAD_SIZE
+#                 for segment in range(total_segments):
+#                     header = struct.pack('!IBQQ', MAGIC_COOKIE, PAYLOAD_MSG_TYPE, total_segments, segment)
+#                     payload_data = os.urandom(PAYLOAD_SIZE - len(header))
+#                     sock.sendto(header + payload_data, addr)
+#                 print(f"{Colors.OKGREEN}Completed UDP transfer to {addr}{Colors.ENDC}")
+
+
 def handle_udp_connection():
+    global conn_id_counter
     """Handles incoming UDP requests and responds with payload packets."""
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp_sock:
         udp_sock.bind(('', UDP_PORT))
         print(f"{Colors.OKGREEN}Listening for UDP requests on port {UDP_PORT}{Colors.ENDC}")
+
         while server_running.is_set():
             readable, _, _ = select([udp_sock], [], [], 1)
             for sock in readable:
@@ -62,12 +89,17 @@ def handle_udp_connection():
                     print(f"{Colors.FAIL}Invalid UDP request from {addr}{Colors.ENDC}")
                     continue
 
+                conn_id_counter += 1  # Increment conn_id for each new request
+                conn_id = conn_id_counter
+
                 total_segments = (file_size + PAYLOAD_SIZE - 1) // PAYLOAD_SIZE
                 for segment in range(total_segments):
-                    header = struct.pack('!IBQQ', MAGIC_COOKIE, PAYLOAD_MSG_TYPE, total_segments, segment)
+                    header = struct.pack('!IBQQQ', MAGIC_COOKIE, PAYLOAD_MSG_TYPE, total_segments, segment, conn_id)
                     payload_data = os.urandom(PAYLOAD_SIZE - len(header))
                     sock.sendto(header + payload_data, addr)
-                print(f"{Colors.OKGREEN}Completed UDP transfer to {addr}{Colors.ENDC}")
+                print(f"{Colors.OKGREEN}Completed UDP transfer to {addr} with conn_id {conn_id}{Colors.ENDC}")
+
+
 
 def handle_tcp_connection(conn, addr):
     """Handles a single TCP connection and sends the requested file."""
