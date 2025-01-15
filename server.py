@@ -86,7 +86,14 @@ def handle_tcp_connection(conn, addr):
             return
         file_size = int(file_size_data.decode().strip())
         print(f"{Colors.OKCYAN}TCP connection from {addr}, sending {file_size} bytes...{Colors.ENDC}")
-        data = os.urandom(file_size)  # Generate random file content
+
+        # Limit file size to prevent overload (e.g., max 100 MB)
+        if file_size > 100 * 1024 * 1024:
+            print(f"{Colors.WARNING}Requested file size too large from {addr}{Colors.ENDC}")
+            conn.sendall(b"ERROR: File size too large.\n")
+            return
+
+        data = os.urandom(file_size)
         conn.sendall(data)
         print(f"{Colors.OKGREEN}TCP transfer to {addr} complete{Colors.ENDC}")
     except Exception as e:
