@@ -11,7 +11,8 @@ MAGIC_COOKIE = 0xabcddcba
 OFFER_MSG_TYPE = 0x2
 REQUEST_MSG_TYPE = 0x3
 PAYLOAD_MSG_TYPE = 0x4
-BUFFER_SIZE = 8 * 1024
+BUFFER_SIZE = 64 * 1024
+
 
 
 # Enhanced ANSI color codes for terminal output
