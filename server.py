@@ -1,120 +1,116 @@
+
 import socket
 import threading
 import struct
 import time
-import sys
+import os
+import random
 from select import select
 
-class Server:
-    def __init__(self, ip, udp_port, tcp_port):
-        self.ip = ip
-        self.udp_port = udp_port
-        self.tcp_port = tcp_port
-        self.magic_cookie = 0xabcddcba
-        self.offer_type = 0x2
-        self.running = True
+# Colors for terminal output
+class Colors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKCYAN = '\033[96m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    BOLD = '\033[1m'
+    ENDC = '\033[0m'
 
-    def send_offers(self):
-        udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-        offer_message = struct.pack('!IBHH', self.magic_cookie, self.offer_type, self.udp_port, self.tcp_port)
-        print(f"\033[92mServer started, listening on IP address {self.ip}\033[0m")
+# Configuration
+MAGIC_COOKIE = 0xabcddcba
+OFFER_MSG_TYPE = 0x2
+REQUEST_MSG_TYPE = 0x3
+PAYLOAD_MSG_TYPE = 0x4
+UDP_PORT = 13117
+TCP_PORT = 20000
+BUFFER_SIZE = 1024
+PAYLOAD_SIZE = 1024  # 1 KB payload
 
-        while self.running:
-            udp_socket.sendto(offer_message, ('<broadcast>', self.udp_port))
+server_running = threading.Event()
+
+def get_server_ip():
+    """Retrieve the server's local IP address."""
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+        s.connect(("8.8.8.8", 80))
+        return s.getsockname()[0]
+
+def udp_broadcast():
+    """Periodically broadcasts a UDP offer message."""
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        offer_message = struct.pack('!IBHH', MAGIC_COOKIE, OFFER_MSG_TYPE, UDP_PORT, TCP_PORT)
+        print(f"{Colors.BOLD}{Colors.OKBLUE}Broadcasting offers on UDP port {UDP_PORT}...{Colors.ENDC}")
+        while server_running.is_set():
+            sock.sendto(offer_message, ('<broadcast>', UDP_PORT))
             time.sleep(1)
 
-    def handle_tcp_connection(self, conn, addr):
-        print(f"\033[94mTCP connection established with {addr}\033[0m")
-        try:
-            data = conn.recv(1024)
-            if data:
-                file_size = int(data.decode().strip())
-                conn.sendall(b'0' * file_size)
-        except Exception as e:
-            print(f"\033[91mError handling TCP connection: {e}\033[0m")
-        finally:
-            conn.close()
+def handle_udp_connection():
+    """Handles incoming UDP requests and responds with payload packets."""
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp_sock:
+        udp_sock.bind(('', UDP_PORT))
+        print(f"{Colors.OKGREEN}Listening for UDP requests on port {UDP_PORT}{Colors.ENDC}")
+        while server_running.is_set():
+            readable, _, _ = select([udp_sock], [], [], 1)
+            for sock in readable:
+                data, addr = sock.recvfrom(BUFFER_SIZE)
+                if len(data) < 13:
+                    continue
+                cookie, msg_type, file_size = struct.unpack('!IBQ', data[:13])
+                if cookie != MAGIC_COOKIE or msg_type != REQUEST_MSG_TYPE:
+                    print(f"{Colors.FAIL}Invalid UDP request from {addr}{Colors.ENDC}")
+                    continue
 
+                total_segments = (file_size + PAYLOAD_SIZE - 1) // PAYLOAD_SIZE
+                for segment in range(total_segments):
+                    header = struct.pack('!IBQQ', MAGIC_COOKIE, PAYLOAD_MSG_TYPE, total_segments, segment)
+                    payload_data = os.urandom(PAYLOAD_SIZE - len(header))
+                    sock.sendto(header + payload_data, addr)
+                print(f"{Colors.OKGREEN}Completed UDP transfer to {addr}{Colors.ENDC}")
 
-    def handle_udp_requests(self, udp_socket):
-        """
-        Handles incoming UDP requests using select() for non-blocking I/O.
-        """
-        BUFFER_SIZE = 1024  # Set a buffer size large enough to handle complete packets
-        while self.running:
-            try:
-                ready, _, _ = select([udp_socket], [], [], 1)  # Use select for non-busy waiting
-                if ready:
-                    data, addr = udp_socket.recvfrom(BUFFER_SIZE)  # Use the buffer size here
+def handle_tcp_connection(conn, addr):
+    """Handles a single TCP connection and sends the requested file."""
+    try:
+        file_size_data = conn.recv(BUFFER_SIZE)
+        if not file_size_data:
+            return
+        file_size = int(file_size_data.decode().strip())
+        print(f"{Colors.OKCYAN}TCP connection from {addr}, sending {file_size} bytes...{Colors.ENDC}")
+        data = os.urandom(file_size)  # Generate random file content
+        conn.sendall(data)
+        print(f"{Colors.OKGREEN}TCP transfer to {addr} complete{Colors.ENDC}")
+    except Exception as e:
+        print(f"{Colors.FAIL}Error handling TCP connection from {addr}: {e}{Colors.ENDC}")
+    finally:
+        conn.close()
 
-                    # Check if the packet size is at least 13 bytes
-                    if len(data) < 13:  # Check for minimum valid packet size
-                        continue  # Skip processing this packet
+def tcp_server():
+    """Listens for incoming TCP connections."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as tcp_sock:
+        tcp_sock.bind(('', TCP_PORT))
+        tcp_sock.listen(5)
+        print(f"{Colors.OKGREEN}Listening for TCP connections on port {TCP_PORT}{Colors.ENDC}")
+        while server_running.is_set():
+            readable, _, _ = select([tcp_sock], [], [], 1)
+            for sock in readable:
+                conn, addr = sock.accept()
+                threading.Thread(target=handle_tcp_connection, args=(conn, addr), daemon=True).start()
 
-                    # Unpack the first 13 bytes of the packet
-                    cookie, msg_type, file_size = struct.unpack('!IBQ', data[:13])  # Correct unpacking for 13 bytes
-
-                    # Check if cookie and message type are valid
-                    if cookie != self.magic_cookie or msg_type != 0x3:
-                        print(f"\033[91mInvalid packet received (cookie: {hex(cookie)}, msg_type: {msg_type})\033[0m")
-                        continue  # Skip processing this packet
-
-                    # If valid, proceed with handling the request
-                    print(f"\033[94mReceived UDP request from {addr}\033[0m")
-                    total_segments = file_size // 1024
-                    for segment in range(total_segments):
-                        if segment % 10 != 0:  # Simulate 10% packet loss
-                            payload = struct.pack('!IBQQ', self.magic_cookie, 0x4, total_segments,
-                                                  segment) + b'0' * 1024
-                            udp_socket.sendto(payload, addr)
-                    print(f"\033[92mCompleted UDP transfer to {addr}\033[0m")
-
-            # except Exception as e:
-            #     print(f"\033[91mError handling UDP request: {e}\033[0m")
-
-            except OSError:
-                if not self.running:
-                    break  # Exit cleanly if the socket is closed during shutdown
-            except Exception as e:
-                if not self.running:
-                    break  # Suppress further errors if shutting down
-                print(f"\033[91mError handling UDP request: {e}\033[0m")
-
-
-    def start(self):
-        udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        udp_socket.bind((self.ip, self.udp_port))
-        udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-
-        tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        tcp_socket.bind((self.ip, self.tcp_port))
-        tcp_socket.listen(5)
-
-        threading.Thread(target=self.send_offers).start()
-        threading.Thread(target=self.handle_udp_requests, args=(udp_socket,)).start()
-
-        try:
-            while self.running:
-                ready, _, _ = select([tcp_socket], [], [], 1)  # Use select to avoid busy-waiting
-                if ready:
-                    conn, addr = tcp_socket.accept()
-                    threading.Thread(target=self.handle_tcp_connection, args=(conn, addr)).start()
-        except KeyboardInterrupt:
-            print("\n\033[93mStopping server... Cleaning up resources.\033[0m")
-        finally:
-            self.running = False
-            try:
-                udp_socket.close()
-                tcp_socket.close()
-            except OSError:
-                pass  # Ignore errors during socket closure
-            print("\033[91mServer has been shut down gracefully.\033[0m")
-            sys.exit(0)
-
-
+def start_server():
+    """Starts the server."""
+    server_running.set()
+    server_ip = get_server_ip()
+    print(f"{Colors.BOLD}{Colors.HEADER}Server started at {server_ip}{Colors.ENDC}")
+    threading.Thread(target=udp_broadcast, daemon=True).start()
+    threading.Thread(target=handle_udp_connection, daemon=True).start()
+    try:
+        tcp_server()
+    except KeyboardInterrupt:
+        print(f"{Colors.WARNING}\nShutting down server...{Colors.ENDC}")
+        server_running.clear()
+    finally:
+        print(f"{Colors.OKGREEN}Server terminated.{Colors.ENDC}")
 
 if __name__ == "__main__":
-    ip_address = socket.gethostbyname(socket.gethostname())
-    server = Server(ip_address, udp_port=13117, tcp_port=20000)
-    server.start()
+    start_server()
