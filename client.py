@@ -32,7 +32,6 @@ def listen_for_offers():
     Listens for broadcast UDP offers from servers and returns the first valid offer's details.
     """
     UDP_PORT = 13117
-    #print(f"{Colors.INFO}{Colors.BOLD}INFO: Listening for server offers on UDP port {UDP_PORT}{Colors.RESET}")
     print(f"{Colors.INFO}{Colors.BOLD}Client started, listening for offer requests...{Colors.RESET}")
 
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
