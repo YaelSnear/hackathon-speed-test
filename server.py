@@ -1,4 +1,3 @@
-
 import socket
 import threading
 import struct
@@ -17,6 +16,7 @@ class Colors:
     FAIL = '\033[91m'
     BOLD = '\033[1m'
     ENDC = '\033[0m'
+
 
 # Configuration
 MAGIC_COOKIE = 0xabcddcba
@@ -46,29 +46,6 @@ def udp_broadcast():
         while server_running.is_set():
             sock.sendto(offer_message, ('<broadcast>', UDP_PORT))
             time.sleep(1)
-
-# def handle_udp_connection():
-#     """Handles incoming UDP requests and responds with payload packets."""
-#     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp_sock:
-#         udp_sock.bind(('', UDP_PORT))
-#         print(f"{Colors.OKGREEN}Listening for UDP requests on port {UDP_PORT}{Colors.ENDC}")
-#         while server_running.is_set():
-#             readable, _, _ = select([udp_sock], [], [], 1)
-#             for sock in readable:
-#                 data, addr = sock.recvfrom(BUFFER_SIZE)
-#                 if len(data) < 13:
-#                     continue
-#                 cookie, msg_type, file_size = struct.unpack('!IBQ', data[:13])
-#                 if cookie != MAGIC_COOKIE or msg_type != REQUEST_MSG_TYPE:
-#                     print(f"{Colors.FAIL}Invalid UDP request from {addr}{Colors.ENDC}")
-#                     continue
-#
-#                 total_segments = (file_size + PAYLOAD_SIZE - 1) // PAYLOAD_SIZE
-#                 for segment in range(total_segments):
-#                     header = struct.pack('!IBQQ', MAGIC_COOKIE, PAYLOAD_MSG_TYPE, total_segments, segment)
-#                     payload_data = os.urandom(PAYLOAD_SIZE - len(header))
-#                     sock.sendto(header + payload_data, addr)
-#                 print(f"{Colors.OKGREEN}Completed UDP transfer to {addr}{Colors.ENDC}")
 
 
 def handle_udp_connection():
