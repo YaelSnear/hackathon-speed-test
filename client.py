@@ -1,4 +1,3 @@
-
 import socket
 import struct
 import time
@@ -12,7 +11,7 @@ MAGIC_COOKIE = 0xabcddcba
 OFFER_MSG_TYPE = 0x2
 REQUEST_MSG_TYPE = 0x3
 PAYLOAD_MSG_TYPE = 0x4
-BUFFER_SIZE = 4 * 1024
+BUFFER_SIZE = 8 * 1024
 
 
 # Enhanced ANSI color codes for terminal output
@@ -32,7 +31,8 @@ def listen_for_offers():
     Listens for broadcast UDP offers from servers and returns the first valid offer's details.
     """
     UDP_PORT = 13117
-    print(f"{Colors.INFO}{Colors.BOLD}INFO: Listening for server offers on UDP port {UDP_PORT}{Colors.RESET}")
+    #print(f"{Colors.INFO}{Colors.BOLD}INFO: Listening for server offers on UDP port {UDP_PORT}{Colors.RESET}")
+    print(f"{Colors.INFO}{Colors.BOLD}Client started, listening for offer requests...{Colors.RESET}")
 
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -144,7 +144,6 @@ def start_client():
     try:
         while True:
             # Listen for offers
-             print(f"{Colors.INFO}{Colors.BOLD}Client started, listening for offer requests...{Colors.RESET}")
             server_ip, udp_port, tcp_port = listen_for_offers()
 
             # Get file size from the user
@@ -212,13 +211,13 @@ def start_client():
             print(f"{Colors.BOLD}{Colors.HEADER}UDP Transfer Summary:{Colors.RESET}")
             for conn_id, duration, speed, success_rate in udp_stats:
                 color = Colors.SUCCESS if success_rate >= 95 else Colors.WARNING if success_rate >= 85 else Colors.ERROR
+                # print with seconds
                 print(
                     f"{Colors.BOLD}{color}  Connection ID  : {conn_id}{Colors.RESET}"
                     f"\n  {color}Duration       : {duration:.2f} seconds{Colors.RESET}"
                     f"\n  {color}Speed          : {speed:.2f} bps{Colors.RESET}"
                     f"\n  {color}Success Rate   : {success_rate:.2f}%{Colors.RESET}\n"
                 )
-
             print(f"{Colors.HEADER}INFO: All transfers complete. Listening for new offers...{Colors.RESET}\n")
 
     except KeyboardInterrupt:
@@ -230,4 +229,5 @@ def start_client():
 
 if __name__ == "__main__":
     start_client()
+
 
